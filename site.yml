@@ -1,0 +1,11 @@
+---
+- name: Deploy
+  hosts: prod
+  gather_facts: no
+
+  handlers:
+    - import_tasks: handlers.yml
+
+  roles:
+    - init
+    - test-1

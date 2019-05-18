@@ -1,0 +1,30 @@
+---
+- include_role: name=inc-docker
+
+- hostname: name="{{ inventory_hostname }}"
+
+- name: Upgrade all packages
+  yum: name="*" state=latest
+
+- name: Install packages
+  yum: name="{{ item }}" state=present
+  loop:
+    - htop
+    - git-core
+    - make
+    - tar
+
+- name: Create deploy group
+  group: name=deploy state=present
+
+- name: Add deploy user with docker access
+  user:
+    name: deploy
+    shell: /bin/bash
+    groups: deploy,docker
+    append: yes
+    generate_ssh_key: yes
+    ssh_key_type: rsa
+    ssh_key_bits: 2048
+    ssh_key_comment: "{{ inventory_hostname }}"
+    ssh_key_file: ".ssh/id_rsa"

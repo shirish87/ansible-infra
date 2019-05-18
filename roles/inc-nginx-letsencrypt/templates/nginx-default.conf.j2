@@ -1,0 +1,13 @@
+
+server {
+  listen                80;
+  server_name           {{ server_names|join(" ") }};
+  access_log            /var/log/nginx/$hostname-http.log combined;
+  error_log             /var/log/nginx/$hostname-http_error.log;
+
+  include               snippets/letsencrypt-challenge.conf;
+
+  location / {
+    rewrite             ^ https://$host$request_uri? permanent;
+  }
+}

@@ -1,0 +1,67 @@
+---
+- name: Validate variables
+  fail: msg="this role requires '{{ item }}' set"
+  when: vars[item] is not defined or (item == 'server_names' and (vars[item]|type_debug != 'AnsibleSequence' or vars[item]|length == 0))
+  loop:
+    - host
+    - https_account_email
+    - server_names
+
+- name: Validate app variables
+  fail: msg="this role requires ('app_servers' or 'api_servers') or 'app_webroot' set"
+  when: not (((app_servers is defined and app_servers|length > 0) or (api_servers is defined and api_servers|length > 0)) or app_webroot is defined)
+
+- name: Set up nginx-snippets
+  include_role: name=inc-nginx-snippets
+
+- name: Create app webroot
+  file: path="/usr/share/nginx/html/{{ app_webroot | default(vars.host) }}" state=directory owner=root group=root mode=0755
+
+- name: Copy nginx custom error files
+  template: src="{{ item }}" dest="/usr/share/nginx/html/{{ app_webroot | default(vars.host) }}/"
+  loop:
+    - maintenance.html
+    - 404.html
+    - 50x.html
+
+- name: Stat nginx conf
+  stat: path="/etc/nginx/conf.d/{{ host }}.conf"
+  register: conf
+
+- name: Create default nginx conf
+  template: src=nginx-default.conf.j2 dest="/etc/nginx/conf.d/{{ host }}.conf"
+  when: conf.stat.exists == False
+
+- name: Restart nginx
+  debug:
+    msg : "Restart nginx"
+  notify: nginx-reload
+  changed_when: true
+  when: conf.stat.exists == False
+
+- name: Validate nginx configuration
+  shell: nginx -t
+  when: conf.stat.exists == False
+
+- name: Set up SSL certs
+  include_role: name=inc-letsencrypt
+  vars:
+    https_domains:
+      - domain: "{{ host }}"
+        args: "-d {{ server_names | join(' -d ') }}"
+        renew: "{{ https_renew | default(True) }}"
+        renew_within_days: "{{ https_renew_within_days | default(14) }}"
+        cron_hr: "{{ https_cron_hr | default(1) }}"
+        cron_min: "{{ https_cron_min | default(0) }}"
+
+- name: Copy nginx configuration
+  template: src=nginx.conf.j2 dest="/etc/nginx/conf.d/{{ host }}.conf"
+
+- name: Validate nginx configuration
+  shell: nginx -t
+
+- name: Restart nginx
+  debug:
+    msg : "Restart nginx"
+  notify: nginx-reload
+  changed_when: true

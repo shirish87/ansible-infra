@@ -1,0 +1,26 @@
+---
+- name: Validate variables
+  fail: msg="this role requires '{{ item }}' set"
+  when: vars[item] is not defined
+  loop:
+    - service_repo
+    - service_name
+
+- name: Clone repository
+  git:
+    repo: "{{ service_repo }}"
+    version: "{{ service_branch | default('master') }}"
+    force: yes
+    dest: "$HOME/{{ service_name }}"
+    accept_hostkey: yes
+  become: yes
+  become_user: deploy
+
+- name: Deploy container
+  shell: make deploy
+  args:
+    chdir: "$HOME/{{ service_name }}"
+  environment:
+    PATH: "/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: yes
+  become_user: deploy

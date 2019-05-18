@@ -1,0 +1,115 @@
+---
+- name: Generate dhparam
+  openssl_dhparam:
+    path: /etc/ssl/certs/dhparam.pem
+    size: 4096
+
+- name: Install lego
+  unarchive:
+    src: "https://github.com/go-acme/lego/releases/download/v{{ lego_version }}/lego_v{{ lego_version }}_linux_amd64.tar.gz"
+    dest: /usr/local/bin
+    remote_src: yes
+    extra_opts:
+      - lego
+    creates: /usr/local/bin/lego
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Create SSL acme-challenge webroot
+  file: path="{{ https_acme_challenge_dir }}" state=directory owner=root group=root mode=0755
+
+- name: Get nginx process PID
+  shell: >
+    echo -n
+    $(pgrep nginx)
+  changed_when: false
+  register: pids_nginx
+
+- name: Generate initial cert (webroot)
+  shell: >
+    if [ ! -f "/etc/pki/tls/lego/certificates/{{ item.domain }}.crt" ]; then
+    export ACME_SERVER="{{ https_dry_run_server }}";
+
+    /usr/local/bin/lego -a {{ https_dry_run|bool | ternary('--server=$ACME_SERVER', '') }}
+    --email="{{ https_account_email }}"
+    --path="/etc/pki/tls/lego"
+    --http
+    --http.webroot="{{ https_acme_challenge_dir }}"
+    {{ item.args }}
+    run || { echo 'Failed to generate cert for domain {{ item.domain }}'; exit 1; };
+    echo "Cert for domain {{ item.domain }} generated.";
+
+    else echo "Cert for domain {{ item.domain }} exists.";
+    fi
+
+  loop: "{{ https_domains }}"
+  when:
+    - https_domains is defined
+    - pids_nginx.stdout|length > 0
+  register: cmd
+  changed_when: '"generated" in cmd.stdout'
+  failed_when: cmd.rc != 0
+
+- debug:
+    msg: "{{ item.stdout }}"
+  loop: "{{ cmd.results }}"
+  when: "cmd.results|length > 0 and 'skipped' not in item"
+
+- name: Generate initial cert (standalone)
+  shell: >
+    if [ ! -f "/etc/pki/tls/lego/certificates/{{ item.domain }}.crt" ]; then
+    export ACME_SERVER="{{ https_dry_run_server }}";
+
+    /usr/local/bin/lego -a {{ https_dry_run|bool | ternary('--server=$ACME_SERVER', '') }}
+    --email="{{ https_account_email }}"
+    --path="/etc/pki/tls/lego"
+    --http
+    --http.port=:80
+    {{ item.args }}
+    run || { echo 'Failed to generate cert for domain {{ item.domain }}'; exit 1; };
+    echo "Cert for domain {{ item.domain }} generated.";
+
+    else echo "Cert for domain {{ item.domain }} exists.";
+    fi
+
+  loop: "{{ https_domains }}"
+  when:
+    - https_domains is defined
+    - pids_nginx.stdout|length == 0
+  register: cmd2
+  changed_when: '"generated" in cmd2.stdout'
+  failed_when: cmd2.rc != 0
+
+- debug:
+    msg: "{{ item.stdout }}"
+  loop: "{{ cmd2.results }}"
+  when: "cmd2.results|length > 0 and 'skipped' not in item"
+
+- name: Set "ACME_SERVER" environment variable for crontab
+  cron:
+    name: ACME_SERVER
+    value: "{{ https_dry_run_server }}"
+    env: yes
+  when: https_domains is defined and https_dry_run|bool == True
+
+- name: Set up automatic renewal
+  cron:
+    name: "letsencrypt-renew-{{ item.domain }}"
+    job: >
+      /usr/local/bin/lego -a {{ https_dry_run|bool | ternary('--server=$ACME_SERVER', '') }}
+      --email="{{ https_account_email }}"
+      --path="/etc/pki/tls/lego"
+      --http
+      --http.webroot="{{ https_acme_challenge_dir }}"
+      {{ item.args }}
+      renew
+      --renew-hook="/usr/sbin/nginx -s reload"
+      --days="{{ item.renew_within_days }}"
+    state: "{{ item.renew | ternary('present', 'absent') }}"
+    minute: "{{ item.cron_min }}"
+    hour: "{{ item.cron_hr }}"
+    weekday: "{{ https_renewal_weekday }}"
+
+  loop: "{{ https_domains }}"
+  when: https_domains is defined

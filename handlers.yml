@@ -1,0 +1,20 @@
+---
+- name: nginx-reload
+  service: name=nginx state=reloaded enabled=yes
+  become: yes
+  become_user: root
+
+- name: nginx-restart
+  service: name=nginx state=restarted
+  become: yes
+  become_user: root
+
+- name: nginx-stop
+  service: name=nginx state=stopped
+  become: yes
+  become_user: root
+
+- name: nginx-start
+  service: name=nginx state=started
+  become: yes
+  become_user: root

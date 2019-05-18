@@ -1,0 +1,15 @@
+---
+- include_role: name=inc-nginx-letsencrypt
+  vars:
+    host: test-1.example.com
+    server_names: ['test-1.example.com']
+    app_servers:
+      - port: 11000
+    api_servers:
+      - port: 11001
+    https_account_email: you@example.com
+
+- include_role: name=inc-docker-pod
+  vars:
+    service_name: 'docker-pod-nodejs'
+    service_repo: 'https://github.com/shirish87/docker-pod-nodejs.git'
