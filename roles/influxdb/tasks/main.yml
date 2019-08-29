@@ -1,0 +1,58 @@
+---
+- name: Add influxdata repository
+  yum_repository:
+    name: influxdata
+    description: InfluxData Repository
+    file: influxdata.repo
+    baseurl: https://repos.influxdata.com/rhel/7/$basearch/stable
+    enabled: yes
+    gpgkey: https://repos.influxdata.com/influxdb.key
+    gpgcheck: yes
+    sslverify: yes
+    state: present
+
+- name: Install influxdb, chronograf
+  yum:
+    name:
+      - influxdb
+      - chronograf
+    state: present
+
+- name: Enable and start service influxdb
+  service:
+    name: influxdb
+    state: started
+    enabled: yes
+
+- name: Enable and start service chronograf
+  service:
+    name: chronograf
+    state: started
+    enabled: yes
+
+- name: Create influxdb admin users
+  command: "influx -execute \"CREATE USER {{item.username}} WITH PASSWORD '{{item.password}}' WITH ALL PRIVILEGES\""
+  loop: "{{ansible_admins}}"
+
+- name: Create influxdb users
+  command: "influx -username '{{ansible_admins[0].username}}' -password '{{ansible_admins[0].password}}' -execute \"CREATE USER {{item.username}} WITH PASSWORD '{{item.password}}'\""
+  loop: "{{ansible_init_dbs}}"
+
+- name: Create influxdb databases
+  command: "influx -username '{{ansible_admins[0].username}}' -password '{{ansible_admins[0].password}}' -execute \"CREATE DATABASE {{item.database}}; GRANT ALL ON {{item.database}} TO {{item.username}}\""
+  loop: "{{ansible_init_dbs}}"
+
+- name: Configure influxdb
+  replace:
+    dest=/etc/influxdb/influxdb.conf
+    regexp='{{item.regexp}}'
+    replace='{{item.replace}}'
+  loop:
+    - { regexp: '..reporting-disabled = false', replace: 'reporting-disabled = true' }
+    - { regexp: '..flux-enabled = false', replace: 'flux-enabled = true' }
+    - { regexp: '..auth-enabled = false', replace: 'auth-enabled = true' }
+
+- name: Restart service influxdb
+  service:
+    name: influxdb
+    state: restarted

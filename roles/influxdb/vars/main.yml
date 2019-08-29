@@ -1,0 +1,9 @@
+---
+ansible_admins:
+  - username: w00t
+    password: w00tw00t
+
+ansible_init_dbs:
+  - database: w00t
+    username: w00tw00t
+    password: w00tw00tw00tw00tw00t
