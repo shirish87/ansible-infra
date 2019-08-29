@@ -1,7 +1,7 @@
 ---
 - name: Include /usr/local/bin in $PATH
   shell: >
-    [[ -f "/etc/profile.d/path_config.sh1" ]] || {
+    [[ -f "/etc/profile.d/path_config.sh" ]] || {
       echo -e "#!/bin/bash\nexport PATH=$PATH:/usr/local/bin" > /etc/profile.d/path_config.sh;
       echo "installed";
     }
