@@ -1,4 +1,13 @@
 ---
+- name: Include /usr/local/bin in $PATH
+  shell: >
+    [[ -f "/etc/profile.d/path_config.sh1" ]] || {
+      echo -e "#!/bin/bash\nexport PATH=$PATH:/usr/local/bin" > /etc/profile.d/path_config.sh;
+      echo "installed";
+    }
+  register: cmd
+  changed_when: "'installed' in cmd.stdout"
+
 - include_role: name=inc-docker
 
 - hostname: name="{{ inventory_hostname }}"

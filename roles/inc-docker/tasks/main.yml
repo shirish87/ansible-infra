@@ -1,11 +1,13 @@
 ---
-# OS package repositories don't always have the latest version
+- name: Create docker group
+  group: name=docker state=present
 
+# OS package repositories don't always have the latest version
 - name: Install docker
   shell: >
-    [[ $(docker --version) == *"{{ docker_version }}"* ]] || {
+    [[ $(/usr/local/bin/docker --version) == *"{{ docker_version }}"* ]] || {
       curl -fsSLO "https://download.docker.com/linux/static/stable/x86_64/docker-{{ docker_version }}-ce.tgz" &&
-      tar xzvf docker-{{ docker_version }}-ce.tgz --strip 1 -C /usr/local/bin docker/docker &&
+      tar xzvf docker-{{ docker_version }}-ce.tgz --strip 1 -C /usr/local/bin docker/* &&
       rm docker-{{ docker_version }}-ce.tgz &&
       echo "installed";
     }
@@ -13,16 +15,15 @@
   changed_when: "'installed' in cmd.stdout"
 
 - name: Ensure docker version
-  shell: "docker --version"
+  shell: "/usr/local/bin/docker --version"
   register: cmd
   changed_when: False
   failed_when: "docker_version not in cmd.stdout"
 
 - name: Install docker-compose
   shell: >
-    [[ $(docker-compose --version) == *"{{ docker_compose_version }}"* ]] || {
-      curl -fsSL "https://github.com/docker/compose/releases/download/{{ docker_compose_version }}/docker-compose-Linux-x86_64"
-        -o /usr/local/bin/docker-compose &&
+    [[ $(/usr/local/bin/docker-compose --version) == *"{{ docker_compose_version }}"* ]] || {
+      curl -fsSL "https://github.com/docker/compose/releases/download/{{ docker_compose_version }}/docker-compose-Linux-x86_64" -o /usr/local/bin/docker-compose &&
       chmod +x /usr/local/bin/docker-compose &&
       echo "installed";
     }
@@ -30,10 +31,19 @@
   changed_when: "'installed' in cmd.stdout"
 
 - name: Ensure docker-compose version
-  shell: "docker-compose --version"
+  shell: "/usr/local/bin/docker-compose --version"
   register: cmd
   changed_when: False
   failed_when: "docker_compose_version not in cmd.stdout"
 
+- name: Copy systemd docker service
+  copy: src=docker.service dest=/etc/systemd/system/docker.service
+
+- name: Copy systemd docker socket
+  copy: src=docker.socket dest=/etc/systemd/system/docker.socket
+
+- name: force systemd to reread config
+  systemd: daemon_reload=yes
+
 - name: Start and enable docker
-  service: name=docker state=started enabled=yes
+  systemd: name=docker.service state=started enabled=yes
