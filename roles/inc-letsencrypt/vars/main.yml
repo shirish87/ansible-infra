@@ -1,5 +1,5 @@
 ---
-lego_version: 2.5.0
+lego_version: 3.0.2
 https_acme_challenge_dir: /etc/acme-challenge
 https_renewal_weekday: 6 # saturday
 https_domains: []
